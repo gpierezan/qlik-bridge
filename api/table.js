@@ -9,6 +9,20 @@ const MAKE_TOKEN = process.env.MAKE_TOKEN;    // senha que você inventa para pr
 const DEFAULT_APP_ID = process.env.APP_ID;    // opcional
 const DEFAULT_OBJECT_ID = process.env.OBJECT_ID; // opcional
 
+// Limpa nomes de coluna vindos como expressão crua do Qlik
+function cleanHeader(raw, i, used) {
+  let s = String(raw == null ? '' : raw);
+  s = s.split(/[\r\n]/)[0];        // só a primeira linha
+  s = s.replace(/\s*\/\/.*$/, '');   // remove comentário //
+  s = s.trim();
+  if (!s) s = `coluna_${i + 1}`;
+  let name = s;
+  let n = 2;
+  while (used.has(name)) name = `${s}_${n++}`;
+  used.add(name);
+  return name;
+}
+
 module.exports = async (req, res) => {
   // 1. Proteção: só quem tem a senha entra
   const token = req.headers['x-token'] || req.query.token;
@@ -80,10 +94,11 @@ module.exports = async (req, res) => {
     // 3. Monta os cabeçalhos das colunas
     const dims = hc.qDimensionInfo || [];
     const meas = hc.qMeasureInfo || [];
+    const used = new Set();
     const headers = [
       ...dims.map(d => d.qFallbackTitle),
       ...meas.map(m => m.qFallbackTitle),
-    ];
+    ].map((t, i) => cleanHeader(t, i, used));
 
     // 4. Se a tabela tiver ordem de colunas customizada, respeita
     const order = hc.qEffectiveInterColumnSortOrder || null;
