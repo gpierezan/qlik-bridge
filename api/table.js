@@ -35,6 +35,40 @@ module.exports = async (req, res) => {
 
     const global = await session.open();
     const app = await global.openDoc(appId);
+
+    // MODO LISTA: /api/table?token=...&list=1  mostra as tabelas do app com os IDs reais
+    if (req.query.list) {
+      const infos = await app.getAllInfos();
+      const tableTypes = ['sn-table', 'table', 'pivot-table', 'sn-pivot-table', 'straight-table'];
+      const found = [];
+      for (const info of infos) {
+        if (!tableTypes.includes(info.qType)) continue;
+        if (found.length >= 60) break;
+        try {
+          const o = await app.getObject(info.qId);
+          const l = await o.getLayout();
+          const hc = l.qHyperCube || {};
+          found.push({
+            id: info.qId,
+            type: info.qType,
+            title: l.title || l.qMeta?.title || '',
+            colunas: [
+              ...(hc.qDimensionInfo || []).map(d => d.qFallbackTitle),
+              ...(hc.qMeasureInfo || []).map(m => m.qFallbackTitle),
+            ],
+            linhas: hc.qSize ? hc.qSize.qcy : null,
+          });
+        } catch (e) {
+          found.push({ id: info.qId, type: info.qType, erro: e.message || 'falha ao ler' });
+        }
+      }
+      return res.status(200).json({
+        procurado: objectId,
+        total_objetos_no_app: infos.length,
+        tabelas: found,
+      });
+    }
+
     const obj = await app.getObject(objectId);
     const layout = await obj.getLayout();
 
